@@ -1,0 +1,131 @@
+@page "/drill"
+@inject ReviewService Review
+@inject NavigationManager Nav
+
+<PageTitle>Drill · Prepapp</PageTitle>
+
+<div class="page-head">
+    <h1>Drill</h1>
+    <select value="@Category" @onchange="OnCategoryChanged" aria-label="Category">
+        <option value="">All categories</option>
+        @foreach (var c in Enum.GetValues<Category>())
+        {
+            <option value="@c">@c.Label()</option>
+        }
+    </select>
+</div>
+
+@if (queue is null)
+{
+    <p class="muted">Loading…</p>
+}
+else if (current is null)
+{
+    <div class="card">
+        <h2>All caught up</h2>
+        <p class="muted">
+            @(reviewedThisSession > 0
+                ? $"You reviewed {reviewedThisSession} card{(reviewedThisSession == 1 ? "" : "s")} this session."
+                : "No cards are due right now.")
+        </p>
+        <a class="button" href="">Back to dashboard</a>
+    </div>
+}
+else
+{
+    <p class="muted">@remaining left in this batch · @reviewedThisSession reviewed</p>
+
+    <article class="card">
+        <div class="tags">
+            <span class="tag">@current.Category.Label()</span>
+            <span class="tag">@current.Topic</span>
+            <span class="tag">@Display.DifficultyLabel(current.Difficulty)</span>
+        </div>
+        <p class="prompt">@current.Prompt</p>
+
+        @if (!revealed)
+        {
+            <p class="muted">Answer out loud or on paper first, then reveal.</p>
+            <button class="button primary" @onclick="() => revealed = true">Show answer</button>
+        }
+        else
+        {
+            <hr />
+            @if (current.KeyPoints.Count > 0)
+            {
+                <h3>Key points</h3>
+                <ul>
+                    @foreach (var point in current.KeyPoints)
+                    {
+                        <li>@point</li>
+                    }
+                </ul>
+            }
+            @if (!string.IsNullOrWhiteSpace(current.ModelAnswer))
+            {
+                <h3>Model answer</h3>
+                <p class="answer">@current.ModelAnswer</p>
+            }
+
+            <div class="ratings">
+                @foreach (var rating in Enum.GetValues<Rating>())
+                {
+                    <button class="button rating-@rating.ToString().ToLowerInvariant()" disabled="@saving" @onclick="() => RateAsync(rating)">@rating</button>
+                }
+            </div>
+        }
+    </article>
+}
+
+@code {
+    private const int BatchSize = 20;
+
+    [SupplyParameterFromQuery]
+    public string? Category { get; set; }
+
+    private Queue<DueCardDto>? queue;
+    private DueCardDto? current;
+    private bool revealed;
+    private bool saving;
+    private int reviewedThisSession;
+
+    private int remaining => queue?.Count + (current is null ? 0 : 1) ?? 0;
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        Category? category = Enum.TryParse<Category>(Category, out var c) ? c : null;
+        queue = new Queue<DueCardDto>(await Review.GetDueAsync(BatchSize, category));
+        Next();
+    }
+
+    private void Next()
+    {
+        revealed = false;
+        current = queue!.TryDequeue(out var card) ? card : null;
+    }
+
+    private async Task RateAsync(Rating rating)
+    {
+        if (current is null || saving)
+            return;
+
+        saving = true;
+        try
+        {
+            await Review.RateAsync(current.CardId, rating);
+            reviewedThisSession++;
+            Next();
+            if (current is null)
+                await LoadAsync(); // more than one batch may be due
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private void OnCategoryChanged(ChangeEventArgs e) =>
+        Nav.NavigateTo(Nav.GetUriWithQueryParameter("category", string.IsNullOrEmpty(e.Value as string) ? null : (string)e.Value!));
+}

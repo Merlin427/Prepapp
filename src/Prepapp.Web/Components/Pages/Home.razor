@@ -1,0 +1,84 @@
+@page "/"
+@inject StatsService Stats
+
+<PageTitle>Dashboard · Prepapp</PageTitle>
+
+<h1>Dashboard</h1>
+
+@if (overview is null)
+{
+    <p class="muted">Loading…</p>
+}
+else
+{
+    <section class="tiles">
+        <div class="tile"><span class="tile-value">@overview.Due</span><span class="tile-label">Due now</span></div>
+        <div class="tile"><span class="tile-value">@overview.TotalQuestions</span><span class="tile-label">Questions</span></div>
+        <div class="tile"><span class="tile-value">@overview.Reviewed</span><span class="tile-label">Reviewed</span></div>
+        <div class="tile"><span class="tile-value">@Display.Percent(overview.Accuracy)</span><span class="tile-label">Accuracy</span></div>
+    </section>
+
+    <p>
+        @if (overview.Due > 0)
+        {
+            <a class="button primary" href="drill">Drill @overview.Due due card@(overview.Due == 1 ? "" : "s")</a>
+        }
+        else
+        {
+            <span class="muted">Nothing due. Come back tomorrow, or add more questions.</span>
+        }
+    </p>
+
+    <h2>Weakest topics</h2>
+    @if (overview.WeakestTopics.Count == 0)
+    {
+        <p class="muted">Rate some cards in the drill to see your weak spots.</p>
+    }
+    else
+    {
+        <table>
+            <thead><tr><th>Topic</th><th>Category</th><th class="num">Accuracy</th><th class="num">Reviewed</th><th class="num">Due</th></tr></thead>
+            <tbody>
+                @foreach (var t in overview.WeakestTopics)
+                {
+                    <tr>
+                        <td>@t.Topic</td>
+                        <td>@t.Category.Label()</td>
+                        <td class="num">@Display.Percent(t.Accuracy)</td>
+                        <td class="num">@t.Reviewed</td>
+                        <td class="num">@t.Due</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <h2>By category</h2>
+    <table>
+        <thead><tr><th>Category</th><th class="num">Accuracy</th><th class="num">Questions</th><th class="num">Reviewed</th><th class="num">Due</th><th></th></tr></thead>
+        <tbody>
+            @foreach (var c in overview.Categories.OrderBy(c => c.Accuracy ?? double.MaxValue).ThenByDescending(c => c.Due))
+            {
+                <tr>
+                    <td>@c.Category.Label()</td>
+                    <td class="num">@Display.Percent(c.Accuracy)</td>
+                    <td class="num">@c.Questions</td>
+                    <td class="num">@c.Reviewed</td>
+                    <td class="num">@c.Due</td>
+                    <td class="num">
+                        @if (c.Due > 0)
+                        {
+                            <a href="@($"drill?category={c.Category}")">Drill</a>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private StatsOverviewDto? overview;
+
+    protected override async Task OnInitializedAsync() => overview = await Stats.GetOverviewAsync();
+}

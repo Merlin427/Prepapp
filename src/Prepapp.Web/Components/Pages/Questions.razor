@@ -1,0 +1,148 @@
+@page "/questions"
+@inject QuestionService QuestionService
+
+<PageTitle>Questions · Prepapp</PageTitle>
+
+<div class="page-head">
+    <h1>Question bank</h1>
+    <button class="button primary" @onclick="ToggleForm">@(showForm ? "Cancel" : "Add question")</button>
+</div>
+
+@if (showForm)
+{
+    <EditForm Model="form" OnValidSubmit="AddAsync" FormName="add-question" class="card form">
+        <DataAnnotationsValidator />
+        <div class="form-row">
+            <label>Category
+                <InputSelect @bind-Value="form.Category">
+                    <option value="">Choose…</option>
+                    @foreach (var c in Enum.GetValues<Category>())
+                    {
+                        <option value="@c">@c.Label()</option>
+                    }
+                </InputSelect>
+                <ValidationMessage For="() => form.Category" />
+            </label>
+            <label>Topic
+                <InputText @bind-Value="form.Topic" placeholder="e.g. async/await" />
+                <ValidationMessage For="() => form.Topic" />
+            </label>
+            <label>Difficulty
+                <InputSelect @bind-Value="form.Difficulty">
+                    @for (var d = Question.MinDifficulty; d <= Question.MaxDifficulty; d++)
+                    {
+                        <option value="@d">@Display.DifficultyLabel(d)</option>
+                    }
+                </InputSelect>
+            </label>
+        </div>
+        <label>Prompt
+            <InputTextArea @bind-Value="form.Prompt" rows="2" />
+            <ValidationMessage For="() => form.Prompt" />
+        </label>
+        <label>Key points <span class="muted">(one per line)</span>
+            <InputTextArea @bind-Value="keyPointsText" rows="4" />
+        </label>
+        <label>Model answer
+            <InputTextArea @bind-Value="form.ModelAnswer" rows="5" />
+        </label>
+        <label>Source
+            <InputText @bind-Value="form.Source" placeholder="Optional" />
+        </label>
+        <button type="submit" class="button primary">Save question</button>
+    </EditForm>
+}
+
+<div class="filters">
+    <select @bind="categoryFilter" @bind:after="LoadAsync" aria-label="Category">
+        <option value="">All categories</option>
+        @foreach (var c in Enum.GetValues<Category>())
+        {
+            <option value="@c">@c.Label()</option>
+        }
+    </select>
+    <select @bind="difficultyFilter" @bind:after="LoadAsync" aria-label="Difficulty">
+        <option value="">Any difficulty</option>
+        @for (var d = Question.MinDifficulty; d <= Question.MaxDifficulty; d++)
+        {
+            <option value="@d">@Display.DifficultyLabel(d)</option>
+        }
+    </select>
+    <input type="search" placeholder="Topic contains…" @bind="topicFilter" @bind:event="oninput" @bind:after="LoadAsync" aria-label="Topic" />
+</div>
+
+@if (questions is null)
+{
+    <p class="muted">Loading…</p>
+}
+else if (questions.Count == 0)
+{
+    <p class="muted">No questions match.</p>
+}
+else
+{
+    <p class="muted">@questions.Count question@(questions.Count == 1 ? "" : "s")</p>
+    @foreach (var q in questions)
+    {
+        <details class="card question">
+            <summary>
+                <span class="prompt">@q.Prompt</span>
+                <span class="tags">
+                    <span class="tag">@q.Category.Label()</span>
+                    <span class="tag">@q.Topic</span>
+                    <span class="tag">@Display.DifficultyLabel(q.Difficulty)</span>
+                </span>
+            </summary>
+            @if (q.KeyPoints.Count > 0)
+            {
+                <h3>Key points</h3>
+                <ul>
+                    @foreach (var point in q.KeyPoints)
+                    {
+                        <li>@point</li>
+                    }
+                </ul>
+            }
+            @if (!string.IsNullOrWhiteSpace(q.ModelAnswer))
+            {
+                <h3>Model answer</h3>
+                <p class="answer">@q.ModelAnswer</p>
+            }
+            @if (q.Source is not null)
+            {
+                <p class="muted">Source: @q.Source</p>
+            }
+        </details>
+    }
+}
+
+@code {
+    private List<QuestionDto>? questions;
+    private Category? categoryFilter;
+    private int? difficultyFilter;
+    private string? topicFilter;
+
+    private bool showForm;
+    private NewQuestionRequest form = new();
+    private string keyPointsText = "";
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync() =>
+        questions = await QuestionService.ListAsync(new QuestionFilter(categoryFilter, difficultyFilter, topicFilter));
+
+    private void ToggleForm()
+    {
+        showForm = !showForm;
+        form = new NewQuestionRequest();
+        keyPointsText = "";
+    }
+
+    private async Task AddAsync()
+    {
+        form.KeyPoints = keyPointsText.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+        await QuestionService.CreateAsync(form);
+        ToggleForm();
+        await LoadAsync();
+    }
+}

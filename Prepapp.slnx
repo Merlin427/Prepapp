@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Prepapp.Domain/Prepapp.Domain.csproj" />
+    <Project Path="src/Prepapp.Infrastructure/Prepapp.Infrastructure.csproj" />
+    <Project Path="src/Prepapp.Web/Prepapp.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Prepapp.IntegrationTests/Prepapp.IntegrationTests.csproj" />
+    <Project Path="tests/Prepapp.UnitTests/Prepapp.UnitTests.csproj" />
+  </Folder>
+</Solution>
